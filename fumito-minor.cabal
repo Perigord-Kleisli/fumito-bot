@@ -1,0 +1,92 @@
+cabal-version:   3.4
+name:            fumito-minor
+version:         0.1.0.0
+synopsis:        Bot
+description:
+license:         MIT
+license-file:    LICENSE
+author:          Trouble-Truffle
+maintainer:      perigordtruffle7318@gmail.com
+category:        Networking
+build-type:      Simple
+extra-doc-files: CHANGELOG.md
+
+executable fumito
+  main-is:            Main.hs
+  other-modules:
+    Polysemy.Websocket
+    Fumito.Gateway
+    Fumito.Types.Channel
+    Fumito.Types.Common
+    Fumito.Types.Event
+    Fumito.Types.Gateway
+    Fumito.Types
+
+  mixins:
+    base hiding (Prelude),
+    relude (Relude as Prelude, Relude.Container.One),
+    relude
+
+  build-depends:
+    , aeson
+    , base                ^>=4.16.1.0
+    , bytestring
+    , conduit
+    , data-default
+    , di
+    , di-core
+    , di-polysemy
+    , lens
+    , mtl
+    , neat-interpolation
+    , network
+    , polysemy
+    , polysemy-plugin
+    , random
+    , relude
+    , req
+    , shower
+    , scientific
+    , text
+    , transformers
+    , websockets
+    , wuss
+
+  hs-source-dirs:     app
+
+  ghc-options:
+    -threaded -O2 -with-rtsopts=-N -fplugin=Polysemy.Plugin
+    -flate-specialise -fspecialise-aggressively -Wall
+    -Wincomplete-record-updates -Wincomplete-uni-patterns
+    -Wmissing-deriving-strategies -Wunused-foralls -Wunused-foralls
+    -fprint-explicit-foralls -fprint-explicit-kinds
+
+  default-language:   GHC2021
+  default-extensions:
+    BlockArguments
+    ConstraintKinds
+    DataKinds
+    DeriveGeneric
+    DeriveAnyClass
+    DerivingStrategies
+    DuplicateRecordFields
+    FlexibleContexts
+    GADTs
+    GeneralizedNewtypeDeriving
+    InstanceSigs
+    KindSignatures
+    LambdaCase
+    OverloadedRecordDot
+    OverloadedStrings
+    PolyKinds
+    QuasiQuotes
+    RankNTypes
+    RecordWildCards
+    ScopedTypeVariables
+    StandaloneDeriving
+    TemplateHaskell
+    TupleSections
+    TypeApplications
+    TypeFamilies
+    TypeOperators
+    ViewPatterns
