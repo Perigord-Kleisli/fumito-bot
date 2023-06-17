@@ -1,1 +1,3 @@
 # Fumitobot-Minor
+
+`nix run`
