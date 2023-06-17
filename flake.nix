@@ -2,7 +2,6 @@
   description = "srid/haskell-template: Nix template for Haskell projects";
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
-    systems.url = "github:nix-systems/default";
     flake-parts.url = "github:hercules-ci/flake-parts";
     haskell-flake.url = "github:srid/haskell-flake";
     treefmt-nix.url = "github:numtide/treefmt-nix";
@@ -13,7 +12,7 @@
 
   outputs = inputs:
     inputs.flake-parts.lib.mkFlake { inherit inputs; } {
-      systems = import inputs.systems;
+      systems = [ "x86_64-linux" ];
       imports = [
         inputs.haskell-flake.flakeModule
         inputs.treefmt-nix.flakeModule
@@ -22,8 +21,6 @@
       ];
       perSystem =
         { self'
-        , system
-        , lib
         , config
         , pkgs
         , ...
@@ -58,7 +55,7 @@
             # Development shell configuration
             devShell = {
               # TODO: Remove this after https://github.com/numtide/treefmt-nix/issues/65
-              tools = hp:
+              tools = _:
                 {
                   treefmt = config.treefmt.build.wrapper;
                 }
@@ -120,7 +117,7 @@
 
           # Default package & app.
           packages.default = self'.packages.fumito-minor;
-          apps.default = self'.apps.fumito-minor;
+          apps.default = self'.apps.fumito;
 
           # Default shell.
           devShells.default = pkgs.mkShell {
