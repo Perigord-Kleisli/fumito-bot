@@ -115,7 +115,7 @@ data ReadyStructure = ReadyStructure
 -- TODO: add the rest
 data PayloadReceive a where
     HelloEvent :: {heartbeat_interval :: Integer} -> PayloadReceive Integer
-    HeartBeatAck :: { zombified_value :: Maybe Int} -> PayloadReceive (Maybe Int)
+    HeartBeatAck :: {zombified_value :: Maybe Int} -> PayloadReceive (Maybe Int)
     Dispatch :: FromJSON a => {d :: DispatchEvent a, t :: Text, s :: Integer} -> PayloadReceive (DispatchEvent a)
 
 opShouldBe :: Int -> Object -> Parser ()

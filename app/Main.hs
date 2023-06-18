@@ -24,12 +24,12 @@ import Fumito.Gateway
 
 import Control.Exception (throwIO)
 
+import Data.Aeson (Value)
 import Data.Default (Default (def))
 import Data.String.Interpolate
 import Data.Text (unpack)
-import Data.Aeson (Value)
 
-gateway :: (Members [Async, DiEffect, Embed IO, Error GatewayException,  FumitoGateway] r) => Sem r ()
+gateway :: (Members [Async, DiEffect, Embed IO, Error GatewayException, FumitoGateway] r) => Sem r ()
 gateway = push "gateway" do
     notice @Text "Established connection with gateway"
 
@@ -45,15 +45,14 @@ gateway = push "gateway" do
             embed $ threadDelay $ fromInteger $ interval_ms * 1000
             sendHeartBeat
 
-    _identity <- sendIdentity 
+    _identity <- sendIdentity
 
-
-    void $ async do 
+    void $ async do
         putStrLn "Type Input to close gateway"
         void $ embed getLine
         closeGateway ("Disconnected" :: Text)
 
-    void $ infinitely do 
+    void $ infinitely do
         sendPayload (HeartBeatSend (Just 2))
         (event :: Either GatewayException (DispatchEvent Value)) <- try receiveDispatchEvent
         whenRight_ event print
