@@ -54,15 +54,16 @@ runFumitoGatewayToReader = interpret \case
     ReceiveHeartBeatAck -> zombified_value <$> receiveDecodeThrow'
     ReceiveDispatchEvent -> do
         dispatchEvent <- receiveDecodeThrow'
-        PS.modify (lastSequenceNum ?~ s dispatchEvent)
+        PS.gets _lastSequenceNum >>= embed . (`writeIORef` Just (dispatchEvent.s))
         return (d dispatchEvent)
     SendIdentity -> do
         iden <- _identity <$> PS.get
         sendTextData (encode (Identify iden))
         readyStructure <- receiveDecodeThrow'
+        PS.gets _lastSequenceNum >>= embed . (`writeIORef` Just (readyStructure.s))
         PS.modify
-            ( (lastSequenceNum ?~ s readyStructure)
-                . (fumito_resume_gateway_url ?~ readyStructure.d.fromDispatch.resume_gateway_url)
+            (
+                 fumito_resume_gateway_url ?~ readyStructure.d.fromDispatch.resume_gateway_url
             )
         return (d readyStructure)
     CloseGateway message -> do
@@ -71,9 +72,9 @@ runFumitoGatewayToReader = interpret \case
 runFumitoGateway :: Members GatewayEffects r => FumitoState -> Sem (FumitoGateway ': r) a -> Sem r a
 runFumitoGateway fumitoOpts = PS.evalLazyState fumitoOpts . runFumitoGatewayToReader . raiseUnder
 
-sendHeartBeat :: Members '[DiEffect, FumitoGateway] r => Sem r ()
+sendHeartBeat :: Members '[Embed IO, DiEffect, FumitoGateway] r => Sem r ()
 sendHeartBeat = do
-    last_s <- _lastSequenceNum <$> getFumitoState
+    last_s <- embed . readIORef  . _lastSequenceNum =<< getFumitoState
     sendPayload (HeartBeatSend last_s)
     let last_s' = maybe "null" (show @Text) last_s
     info @Text [i|Sent heartbeat event with sequence number `#{last_s'}`|]

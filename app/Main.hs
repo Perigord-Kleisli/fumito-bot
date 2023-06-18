@@ -26,8 +26,10 @@ import Control.Exception (throwIO)
 
 import Data.Default (Default (def))
 import Data.String.Interpolate
+import Data.Text (unpack)
+import Data.Aeson (Value)
 
-gateway :: (Members [Async, DiEffect, Embed IO, FumitoGateway] r) => Sem r ()
+gateway :: (Members [Async, DiEffect, Embed IO, Error GatewayException,  FumitoGateway] r) => Sem r ()
 gateway = push "gateway" do
     notice @Text "Established connection with gateway"
 
@@ -42,12 +44,21 @@ gateway = push "gateway" do
         infinitely do
             embed $ threadDelay $ fromInteger $ interval_ms * 1000
             sendHeartBeat
-            getFumitoState >>= print
 
     _identity <- sendIdentity 
 
 
-    void getLine
+    void $ async do 
+        putStrLn "Type Input to close gateway"
+        void $ embed getLine
+        closeGateway ("Disconnected" :: Text)
+
+    void $ infinitely do 
+        sendPayload (HeartBeatSend (Just 2))
+        (event :: Either GatewayException (DispatchEvent Value)) <- try receiveDispatchEvent
+        whenRight_ event print
+        embed $ threadDelay 1_000_000
+
     notice @Text "Closing Gateway Connection"
     closeGateway ("Disconnected" :: Text)
 
@@ -61,7 +72,8 @@ main = do
                 , intents = 3665
                 , shard = Just (0, 1)
                 }
-    let botOpts = def {_identity}
+    _lastSequenceNum <- newIORef Nothing
+    let botOpts = FumitoState {_lastSequenceNum, _identity, _fumito_resume_gateway_url = Nothing}
     runSecureClientWith
         "gateway.discord.gg"
         443

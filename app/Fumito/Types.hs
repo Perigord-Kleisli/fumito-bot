@@ -10,24 +10,14 @@ module Fumito.Types (
 ) where
 
 import Control.Lens (makeLenses)
-import Data.Default (Default (..))
 import Fumito.Types.Channel
 import Fumito.Types.Common
 import Fumito.Types.Exception
 import Fumito.Types.Gateway
 
 data FumitoState = FumitoState
-    { _lastSequenceNum :: Maybe Integer
+    { _lastSequenceNum :: IORef (Maybe Integer)
     , _identity :: IdentifyStructure
     , _fumito_resume_gateway_url :: Maybe Text
     }
-    deriving stock (Show)
 makeLenses ''FumitoState
-
-instance Default FumitoState where
-    def =
-        FumitoState
-            { _lastSequenceNum = Nothing
-            , _identity = def
-            , _fumito_resume_gateway_url = Nothing
-            }
