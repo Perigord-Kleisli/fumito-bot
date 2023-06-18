@@ -2,8 +2,9 @@ module Fumito.Types.Common where
 
 import Data.Aeson
 import Data.Bits
-import Data.Default (Default)
 import Data.Scientific (isFloating)
+import Di qualified as D
+import DiPolysemy (Di)
 import Relude.Extra (safeToEnum)
 
 newtype Snowflake = Snowflake Word64
@@ -180,3 +181,5 @@ data User = User
     }
     deriving stock (Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
+
+type DiEffect = Di D.Level D.Path D.Message

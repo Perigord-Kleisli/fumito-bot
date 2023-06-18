@@ -3,7 +3,6 @@ module Main (main) where
 import Prelude hiding (Reader, runReader)
 
 import Fumito.Types
-import Fumito.Types.Gateway
 
 import GHC.Conc
 import System.Random
@@ -11,74 +10,58 @@ import System.Random
 import Network.WebSockets (defaultConnectionOptions)
 import Wuss
 
-import Di (Level, Message, Path, new)
-
-import Data.Aeson
+import Di (new)
 
 import Data.ByteString qualified as BS
-import Data.Default
+
 import DiPolysemy
 import Polysemy
 import Polysemy.Async
-import Polysemy.Reader qualified as R
+import Polysemy.Error
 import Polysemy.Websocket
 
-import Shower
+import Fumito.Gateway
 
-gateway :: Members '[Di Level Path Message, Async, WebSocket, R.Reader FumitoOpts, Embed IO] r => Sem r ()
+import Control.Exception (throwIO)
+
+import Data.Default (Default (def))
+import Data.String.Interpolate
+
+gateway :: (Members [Async, DiEffect, Embed IO, FumitoGateway] r) => Sem r ()
 gateway = push "gateway" do
-    notice @Text "Starting Gateway Connection"
-    notice @Text "Press Enter to Exit"
-    interval_ms <-
-        receiveData
-            >>= fmap (heartbeat_interval . d)
-                . embed
-                . either fail pure
-                . eitherDecode
+    notice @Text "Established connection with gateway"
 
-    void $ push "heartbeat" $ async $ infinitely do
+    interval_ms <- (`div` 10) <$> receiveHelloEvent
+    info @Text [i|Received heartbeat interval: #{interval_ms}ms|]
+
+    void $ push "heartbeat" $ async do
         jitter <- randomRIO @Float (0, 1)
         embed $ threadDelay $ floor $ fromIntegral interval_ms * jitter * 1000
-        sendTextData $
-            encode
-                Payload
-                    { op = Heartbeat
-                    , d = Nothing @Int
-                    , s = Nothing
-                    , t = Nothing
-                    }
-        info @Text "sent heartbeat event"
+        -- TODO: get `_lastSequenceNum` from future state updates for `sendHeartBeat` calls
+        sendHeartBeat
+        infinitely do
+            embed $ threadDelay $ fromInteger $ interval_ms * 1000
+            sendHeartBeat
+            getFumitoState >>= print
 
-    botToken <- R.asks (\x -> x.token)
+    _identity <- sendIdentity 
 
-    let botIdentity =
-            def
-                { token = decodeUtf8 botToken
-                , intents = 3665
-                , properties = def {os = "linux"}
-                , shard = Just (0, 1)
-                }
 
-    embed $ printer botIdentity
-    sendTextData $
-        encode $
-            Payload
-                { op = Identify
-                , d = botIdentity
-                , s = Nothing
-                , t = Nothing
-                }
-    readyEvent <- receiveData >>= embed . either fail pure . eitherDecode @(GatewayEventPayload ReadyStructure)
-    embed $ printer readyEvent
-
-    void $ embed getLine
+    void getLine
     notice @Text "Closing Gateway Connection"
-    sendClose @Text "Disconnected"
+    closeGateway ("Disconnected" :: Text)
 
 main :: IO ()
 main = do
-    token <- BS.init <$> readFileBS "Token.dat"
-    let botOpts = FumitoOpts {token, dummy = 1}
+    _token <- BS.init <$> readFileBS "Token.dat"
+    let _identity =
+            def
+                { token = decodeUtf8 _token
+                , properties = def {os = "linux"}
+                , intents = 3665
+                , shard = Just (0, 1)
+                }
+    let botOpts = def {_identity}
     runSecureClientWith
         "gateway.discord.gg"
         443
@@ -86,8 +69,11 @@ main = do
         defaultConnectionOptions
         [("v", "10"), ("encoding", "json")]
         \connection -> new \di ->
-            runM
-                . asyncToIO
-                . runDiToIO di
-                . R.runReader botOpts
-                $ runWSToIO connection gateway
+            either throwIO pure
+                =<< ( runM
+                        . runError
+                        . asyncToIO
+                        . runDiToIO di
+                        . runWSToIO connection
+                        $ runFumitoGateway botOpts gateway
+                    )

@@ -3,68 +3,15 @@
 module Fumito.Types.Gateway where
 
 import Data.Aeson
+import Data.Aeson.Types (Parser)
 import Data.Default
 import Data.Scientific
+import Data.String.Interpolate
 import Fumito.Types.Common
-import GHC.Base (errorWithoutStackTrace)
 import Relude.Extra (safeToEnum)
 
 instance Default Text where
     def = ""
-
-data Opcode
-    = Dispatch
-    | Heartbeat
-    | Identify
-    | PresenceUpdate
-    | VoiceStateUpdate
-    | Resume
-    | Reconnect
-    | RequestGuildMembers
-    | InvalidSession
-    | Hello
-    | HeartbeatAck
-    deriving stock (Show, Eq, Bounded)
-
-instance Default Opcode where
-    def = Dispatch
-
-instance Enum Opcode where
-    fromEnum Dispatch = 0
-    fromEnum Heartbeat = 1
-    fromEnum Identify = 2
-    fromEnum PresenceUpdate = 3
-    fromEnum VoiceStateUpdate = 4
-    fromEnum Resume = 6
-    fromEnum Reconnect = 7
-    fromEnum RequestGuildMembers = 8
-    fromEnum InvalidSession = 9
-    fromEnum Hello = 10
-    fromEnum HeartbeatAck = 11
-
-    toEnum 0 = Dispatch
-    toEnum 1 = Heartbeat
-    toEnum 2 = Identify
-    toEnum 3 = PresenceUpdate
-    toEnum 4 = VoiceStateUpdate
-    toEnum 6 = Resume
-    toEnum 7 = Reconnect
-    toEnum 8 = RequestGuildMembers
-    toEnum 9 = InvalidSession
-    toEnum 10 = Hello
-    toEnum 11 = HeartbeatAck
-    toEnum _ = errorWithoutStackTrace "Fumito.Types.Gateway.toEnum bad argument"
-
-instance FromJSON Opcode where
-    parseJSON = withScientific "Gateway Opcode" \n -> do
-        when (isFloating n) (fail "Expected Integer Value")
-        maybe (fail ("Unknown opcode: " ++ show n)) pure $ safeToEnum $ floor n
-instance ToJSON Opcode where
-    toJSON = Number . fromIntegral . fromEnum
-
-newtype HelloEvent = HelloEvent {heartbeat_interval :: Integer}
-    deriving stock (Show, Generic)
-    deriving anyclass (ToJSON, FromJSON)
 
 data ConnectionProperties = ConnnectionProperties
     { os :: Text
@@ -126,18 +73,6 @@ data UpdatePrescense = UpdatePrescense
     deriving stock (Show, Generic)
     deriving anyclass (FromJSON, ToJSON)
 
-data ReadyStructure = ReadyStructure
-    { v :: Int
-    , user :: User
-    , guilds :: [UnavailableGuild]
-    , session_id :: Text
-    , resume_gateway_url :: Text
-    , shard :: Maybe (Int, Int)
-    , application :: ReadyEventApplication
-    }
-    deriving stock (Show, Generic)
-    deriving anyclass (FromJSON, ToJSON)
-
 data IdentifyStructure = IdentifyStructure
     { token :: Text
     , properties :: ConnectionProperties
@@ -150,11 +85,69 @@ data IdentifyStructure = IdentifyStructure
     deriving stock (Show, Generic)
     deriving anyclass (FromJSON, ToJSON, Default)
 
-data GatewayEventPayload a = Payload
-    { op :: Opcode
-    , d :: a
-    , s :: Maybe Integer
-    , t :: Maybe Text
+data PayloadSend
+    = HeartBeatSend {last_sequence_num :: Maybe Integer}
+    | Identify IdentifyStructure
+    deriving stock (Show)
+
+instance ToJSON PayloadSend where
+    toJSON (Identify iden) = object ["op" .= (2 :: Int), "d" .= iden]
+    toJSON (HeartBeatSend last_s) =
+        object
+            ["op" .= (1 :: Int), "d" .= last_s]
+
+newtype DispatchEvent a = DispatchEvent {fromDispatch :: a}
+    deriving stock (Show)
+    deriving newtype (FromJSON, ToJSON)
+
+data ReadyStructure = ReadyStructure
+    { v :: Int
+    , user :: User
+    , guilds :: [UnavailableGuild]
+    , session_id :: Text
+    , resume_gateway_url :: Text
+    , shard :: Maybe (Int, Int)
+    , application :: ReadyEventApplication
     }
     deriving stock (Show, Generic)
-    deriving anyclass (FromJSON, ToJSON, Default)
+    deriving anyclass (FromJSON, ToJSON)
+
+-- TODO: add the rest
+data PayloadReceive a where
+    HelloEvent :: {heartbeat_interval :: Integer} -> PayloadReceive Integer
+    HeartBeatAck :: { zombified_value :: Maybe Int} -> PayloadReceive (Maybe Int)
+    Dispatch :: FromJSON a => {d :: DispatchEvent a, t :: Text, s :: Integer} -> PayloadReceive (DispatchEvent a)
+
+opShouldBe :: Int -> Object -> Parser ()
+opShouldBe n ob = do
+    n' <- ob .: "op"
+    if n == n'
+        then pass
+        else fail [i|Unexpected opcode (#{n'}), expected (#{n})|]
+
+withPayload :: (Object -> Parser a) -> Value -> Parser a
+withPayload = withObject "Receive Event Payload"
+
+instance FromJSON (PayloadReceive Integer) where
+    parseJSON = withPayload \ob -> do
+        opShouldBe 10 ob
+        ob
+            .: "d"
+            >>= withObject
+                "Hello Event"
+                (fmap HelloEvent . (.: "heartbeat_interval"))
+
+instance FromJSON (PayloadReceive (Maybe Int)) where
+    parseJSON = withPayload \ob -> do
+        ob .: "op" >>= \case
+            (1 :: Int) -> ob .: "d"
+            11 -> return (HeartBeatAck Nothing)
+            n -> fail [i|Unknown opcode in heartbeat loop (#{n})|]
+
+instance FromJSON a => FromJSON (PayloadReceive (DispatchEvent a)) where
+    parseJSON = withPayload \ob -> do
+        opShouldBe 0 ob
+        d <- ob .: "d" >>= parseJSON
+        t <- ob .: "t"
+        s <- ob .: "s"
+        return Dispatch {d, t, s}
