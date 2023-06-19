@@ -16,11 +16,15 @@ executable fumito
   other-modules:
     Polysemy.Websocket
     Fumito.Gateway
+    Fumito.Utils
+    Fumito.HTTP.Client
     Fumito.Types.Channel
     Fumito.Types.Common
     Fumito.Types.Event
     Fumito.Types.Exception
     Fumito.Types.Gateway
+    Fumito.Types.Payload
+    Fumito.Types.Guild
     Fumito.Types
 
   mixins:
@@ -32,7 +36,6 @@ executable fumito
     , aeson
     , base                ^>=4.16.1.0
     , bytestring
-    , conduit
     , data-default
     , di
     , di-core
@@ -47,7 +50,10 @@ executable fumito
     , req
     , string-interpolate
     , scientific
+    , time
     , text
+    , th-abstraction
+    , template-haskell
     , transformers
     , websockets
     , wuss

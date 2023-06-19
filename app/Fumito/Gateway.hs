@@ -17,12 +17,9 @@ import Polysemy.Websocket (WebSocket, receiveData, sendClose, sendTextData)
 
 data FumitoGateway m a where
     SendPayload :: PayloadSend -> FumitoGateway m ()
-    SendIdentity :: FumitoGateway m (DispatchEvent ReadyStructure)
-    ReceiveDirectData :: FumitoGateway m LByteString
+    ReceivePayload :: FumitoGateway m PayloadReceive
+    ReceivePayload' :: FumitoGateway m PayloadReceive
     GetFumitoState :: FumitoGateway m FumitoState
-    ReceiveHelloEvent :: FumitoGateway m Integer
-    ReceiveHeartBeatAck :: FumitoGateway m (Maybe Int)
-    ReceiveDispatchEvent :: FromJSON a => FumitoGateway m (DispatchEvent a)
     CloseGateway :: NW.WebSocketsData a => a -> FumitoGateway m ()
 makeSem ''FumitoGateway
 
@@ -48,30 +45,44 @@ receiveDecodeThrow' = do
 runFumitoGatewayToReader :: forall a r. (Members (PS.State FumitoState ': GatewayEffects) r) => Sem (FumitoGateway ': r) a -> Sem r a
 runFumitoGatewayToReader = interpret \case
     SendPayload payload -> sendTextData (encode payload)
-    ReceiveDirectData -> receiveData
     GetFumitoState -> PS.get
-    ReceiveHelloEvent -> heartbeat_interval <$> receiveDecodeThrow'
-    ReceiveHeartBeatAck -> zombified_value <$> receiveDecodeThrow'
-    ReceiveDispatchEvent -> do
-        dispatchEvent <- receiveDecodeThrow'
-        PS.gets _lastSequenceNum >>= embed . (`writeIORef` Just (dispatchEvent.s))
-        return (d dispatchEvent)
-    SendIdentity -> do
-        iden <- _identity <$> PS.get
-        sendTextData (encode (Identify iden))
-        readyStructure <- receiveDecodeThrow'
-        PS.gets _lastSequenceNum >>= embed . (`writeIORef` Just (readyStructure.s))
-        PS.modify
-            ( fumito_resume_gateway_url ?~ readyStructure.d.fromDispatch.resume_gateway_url
-            )
-        return (d readyStructure)
+    ReceivePayload -> receiveDecodeThrow >>= actOnInput
+    ReceivePayload' -> receiveDecodeThrow' >>= actOnInput
     CloseGateway message -> do
         sendClose message
+    where
+        actOnInput dispatch@(Dispatch {s = s, d = READY (ReadyStructure {resume_gateway_url})}) = do
+            PS.gets _lastSequenceNum >>= (`writeIORef` Just s)
+            PS.modify
+                (fumito_resume_gateway_url ?~ resume_gateway_url)
+            return dispatch
+        actOnInput dispatch@(Dispatch {s = s, d = _}) = do
+            PS.gets _lastSequenceNum >>= (`writeIORef` Just s)
+            return dispatch
+        actOnInput x = return x
 
 runFumitoGateway :: Members GatewayEffects r => FumitoState -> Sem (FumitoGateway ': r) a -> Sem r a
 runFumitoGateway fumitoOpts = PS.evalLazyState fumitoOpts . runFumitoGatewayToReader . raiseUnder
 
-sendHeartBeat :: Members '[Embed IO, DiEffect, FumitoGateway] r => Sem r ()
+sendIdentity :: Member FumitoGateway r => Sem r PayloadReceive
+sendIdentity = do
+    ident <- _identity <$> getFumitoState
+    sendPayload (Identify ident)
+    receivePayload
+
+receiveDispatchEvent :: Members '[Error GatewayException, FumitoGateway] r => Sem r DispatchEvent
+receiveDispatchEvent = do
+    receivePayload >>= \case
+        Dispatch {d} -> return d
+        e -> throw (EventMismatch "DispatchEvent" e)
+
+receiveHelloEvent :: Members '[Error GatewayException, FumitoGateway] r => Sem r Integer
+receiveHelloEvent = do
+    receivePayload' >>= \case
+        HelloEvent interval -> return interval
+        e -> throw (EventMismatch "HelloEvent" e)
+
+sendHeartBeat :: Members '[Embed IO, Di D.Level D.Path D.Message, FumitoGateway] r => Sem r ()
 sendHeartBeat = do
     last_s <- embed . readIORef . _lastSequenceNum =<< getFumitoState
     sendPayload (HeartBeatSend last_s)

@@ -3,8 +3,6 @@ module Fumito.Types.Common where
 import Data.Aeson
 import Data.Bits
 import Data.Scientific (isFloating)
-import Di qualified as D
-import DiPolysemy (Di)
 import Relude.Extra (safeToEnum)
 
 newtype Snowflake = Snowflake Word64
@@ -64,7 +62,7 @@ data PremiumType
     | NitroClassic
     | Nitro
     | NitroBasic
-    deriving stock (Show, Enum, Bounded)
+    deriving stock (Show, Eq, Enum, Bounded)
 
 instance ToJSON PremiumType where
     toJSON = Number . fromIntegral . fromEnum
@@ -179,7 +177,5 @@ data User = User
     , premium_type :: Maybe PremiumType
     , public_flags :: Maybe Word32
     }
-    deriving stock (Show, Generic)
+    deriving stock (Show, Eq, Generic)
     deriving anyclass (ToJSON, FromJSON)
-
-type DiEffect = Di D.Level D.Path D.Message

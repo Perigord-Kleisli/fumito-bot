@@ -3,11 +3,13 @@
 module Fumito.Types.Gateway where
 
 import Data.Aeson
-import Data.Aeson.Types (Parser)
 import Data.Default
 import Data.Scientific
 import Data.String.Interpolate
+import Data.Time (UTCTime)
+import Fumito.Types.Channel (Channel)
 import Fumito.Types.Common
+import Fumito.Types.Guild (GuildMember)
 import Relude.Extra (safeToEnum)
 
 instance Default Text where
@@ -96,10 +98,6 @@ instance ToJSON PayloadSend where
         object
             ["op" .= (1 :: Int), "d" .= last_s]
 
-newtype DispatchEvent a = DispatchEvent {fromDispatch :: a}
-    deriving stock (Show)
-    deriving newtype (FromJSON, ToJSON)
-
 data ReadyStructure = ReadyStructure
     { v :: Int
     , user :: User
@@ -112,42 +110,66 @@ data ReadyStructure = ReadyStructure
     deriving stock (Show, Generic)
     deriving anyclass (FromJSON, ToJSON)
 
+-- | States of members currently in voice channels; lacks the guild_id key
+data GuildCreateVoiceState = GuildCreateVoiceState
+    { channel_id :: Maybe Snowflake
+    , user_id :: Snowflake
+    , member :: GuildMember
+    , session_id :: Text
+    , deaf :: Bool
+    , mute :: Bool
+    , self_deaf :: Bool
+    , self_mute :: Bool
+    , self_stream :: Maybe Bool
+    , self_video :: Bool
+    , supress :: Bool
+    , request_to_speak_timestamp :: Maybe UTCTime
+    }
+    deriving stock (Show, Eq, Generic)
+    deriving anyclass (FromJSON, ToJSON)
+
+data GuildCreateStructure = GuildCreateStructure
+    { joined_at :: UTCTime
+    , large :: Bool
+    , unavailable :: Maybe Bool
+    , member_count :: Integer
+    , voice_states :: [GuildCreateVoiceState]
+    , members :: [GuildMember]
+    , channels :: [Channel]
+    }
+    deriving stock (Show, Generic)
+    deriving anyclass (FromJSON, ToJSON)
+
+data DispatchEvent
+    = READY ReadyStructure
+    | GUILD_CREATE GuildCreateStructure
+    deriving stock (Show, Generic)
+
 -- TODO: add the rest
-data PayloadReceive a where
-    HelloEvent :: {heartbeat_interval :: Integer} -> PayloadReceive Integer
-    HeartBeatAck :: {zombified_value :: Maybe Int} -> PayloadReceive (Maybe Int)
-    Dispatch :: FromJSON a => {d :: DispatchEvent a, t :: Text, s :: Integer} -> PayloadReceive (DispatchEvent a)
+data PayloadReceive
+    = Dispatch {d :: DispatchEvent, s :: Integer}
+    | HeartbeatReceive {last_sequence_num :: Maybe Integer}
+    | HelloEvent {heartbeat_interval :: Integer}
+    | HeartBeatAck
+    deriving stock (Show)
 
-opShouldBe :: Int -> Object -> Parser ()
-opShouldBe n ob = do
-    n' <- ob .: "op"
-    if n == n'
-        then pass
-        else fail [i|Unexpected opcode (#{n'}), expected (#{n})|]
-
-withPayload :: (Object -> Parser a) -> Value -> Parser a
-withPayload = withObject "Receive Event Payload"
-
-instance FromJSON (PayloadReceive Integer) where
-    parseJSON = withPayload \ob -> do
-        opShouldBe 10 ob
-        ob
-            .: "d"
-            >>= withObject
-                "Hello Event"
-                (fmap HelloEvent . (.: "heartbeat_interval"))
-
-instance FromJSON (PayloadReceive (Maybe Int)) where
-    parseJSON = withPayload \ob -> do
+instance FromJSON PayloadReceive where
+    parseJSON = withObject "Receive Event Payload" \ob -> do
         ob .: "op" >>= \case
-            (1 :: Int) -> ob .: "d"
-            11 -> return (HeartBeatAck Nothing)
-            n -> fail [i|Unknown opcode in heartbeat loop (#{n})|]
-
-instance FromJSON a => FromJSON (PayloadReceive (DispatchEvent a)) where
-    parseJSON = withPayload \ob -> do
-        opShouldBe 0 ob
-        d <- ob .: "d" >>= parseJSON
-        t <- ob .: "t"
-        s <- ob .: "s"
-        return Dispatch {d, t, s}
+            0 -> do
+                Dispatch
+                    <$> ( ob .: "t" >>= \case
+                            "READY" -> READY <$> ob .: "d"
+                            "GUILD_CREATE" -> GUILD_CREATE <$> ob .: "d"
+                            (e :: Text) -> fail [i|Unknown dispatch event '#{e}'|]
+                        )
+                    <*> ob
+                        .: "s"
+            1 ->
+                HeartbeatReceive
+                    <$> ob
+                        .: "d"
+            10 ->
+                (ob .: "d") >>= withObject "Hello Event" (fmap HelloEvent . (.: "heartbeat_interval"))
+            11 -> return HeartBeatAck
+            (n :: Int) -> fail [i|Unknown OpCode (#{n})|]

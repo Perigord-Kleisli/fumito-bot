@@ -24,42 +24,39 @@ import Fumito.Gateway
 
 import Control.Exception (throwIO)
 
-import Data.Aeson (Value)
 import Data.Default (Default (def))
 import Data.String.Interpolate
-import Data.Text (unpack)
+import Di qualified as D
 
-gateway :: (Members [Async, DiEffect, Embed IO, Error GatewayException, FumitoGateway] r) => Sem r ()
+gateway :: (Members [Async, Di D.Level D.Path D.Message, Embed IO, Error GatewayException, FumitoGateway] r) => Sem r ()
 gateway = push "gateway" do
     notice @Text "Established connection with gateway"
 
-    interval_ms <- (`div` 10) <$> receiveHelloEvent
+    interval_ms <- receiveHelloEvent
     info @Text [i|Received heartbeat interval: #{interval_ms}ms|]
 
     void $ push "heartbeat" $ async do
         jitter <- randomRIO @Float (0, 1)
         embed $ threadDelay $ floor $ fromIntegral interval_ms * jitter * 1000
-        -- TODO: get `_lastSequenceNum` from future state updates for `sendHeartBeat` calls
         sendHeartBeat
         infinitely do
             embed $ threadDelay $ fromInteger $ interval_ms * 1000
             sendHeartBeat
 
-    _identity <- sendIdentity
+    sendIdentity >>= print
 
     void $ async do
         putStrLn "Type Input to close gateway"
         void $ embed getLine
+        notice @Text "Closing Gateway Connection"
         closeGateway ("Disconnected" :: Text)
 
     void $ infinitely do
         sendPayload (HeartBeatSend (Just 2))
-        (event :: Either GatewayException (DispatchEvent Value)) <- try receiveDispatchEvent
-        whenRight_ event print
+        try receiveDispatchEvent >>= \case
+            Right (GUILD_CREATE n) -> print $ map permission_overwrites $ channels n
+            _ -> pass
         embed $ threadDelay 1_000_000
-
-    notice @Text "Closing Gateway Connection"
-    closeGateway ("Disconnected" :: Text)
 
 main :: IO ()
 main = do
