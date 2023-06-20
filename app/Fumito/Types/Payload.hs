@@ -4,7 +4,7 @@ import Data.Aeson.TH (deriveJSON)
 import Data.Aeson.Types
 import Data.Time (UTCTime)
 import Fumito.Types.Channel (Channel, ChannelMention)
-import Fumito.Types.Common (Application, PremiumType, Role, Snowflake, User, Nonce)
+import Fumito.Types.Common (Application, Nonce, PremiumType, Role, Snowflake, User)
 import Fumito.Types.Guild (GuildMember)
 import Fumito.Types.Message (Attachment, Embed, Message, MessageActivity, MessageComponent, MessageInteraction, MessageType, Reaction, RoleSubscriptionData, Sticker, StickerItem)
 
@@ -64,3 +64,57 @@ data MessageCreatePayload = MessageCreatePayload
     }
     deriving stock (Show)
 deriveJSON defaultOptions {fieldLabelModifier = \case { "type_" -> "type"; n -> n }} ''MessageCreatePayload
+
+data MessageEditPayload = MessageEditPayload
+    { id :: Snowflake
+    , channel_id :: Snowflake
+    , author :: User
+    , content :: Text
+    , timestamp :: UTCTime
+    , edited_timestamp :: Maybe UTCTime
+    , tts :: Bool
+    , mention_everyone :: Bool
+    , mentions :: [MessageCreateUser]
+    , mention_roles :: [Role]
+    , mention_channels :: Maybe [ChannelMention]
+    , attachments :: [Attachment]
+    , embeds :: [Embed]
+    , reactions :: Maybe [Reaction]
+    , nonce :: Maybe Nonce
+    , pinned :: Bool
+    , webhook_id :: Maybe Snowflake
+    , type_ :: MessageType
+    , activity :: Maybe MessageActivity
+    , application :: Maybe Application
+    , application_id :: Maybe Snowflake
+    , message_reference :: Maybe Message
+    , flags :: Maybe Word16
+    , referenced_message :: Maybe Message
+    , interaction :: Maybe MessageInteraction
+    , thread :: Maybe Channel
+    , components :: Maybe [MessageComponent]
+    , sticker_items :: Maybe [StickerItem]
+    , stickers :: Maybe [Sticker]
+    , position :: Maybe Int
+    , role_subscription_data :: Maybe RoleSubscriptionData
+    , guild_id :: Maybe Snowflake
+    , member :: Maybe GuildMember
+    }
+    deriving stock (Show)
+deriveJSON defaultOptions {fieldLabelModifier = \case { "type_" -> "type"; n -> n }} ''MessageEditPayload
+
+data MessageDeletePayload = MessageDeletePayload
+    { id :: Snowflake
+    , channel_id :: Snowflake
+    , guild_id :: Maybe Snowflake
+    }
+    deriving stock (Show, Generic)
+    deriving anyclass (FromJSON, ToJSON)
+
+data MessageDeleteBulkPayload = MessageDeleteBulkPayload
+    { id :: [Snowflake]
+    , channel_id :: Snowflake
+    , guild_id :: Maybe Snowflake
+    }
+    deriving stock (Show, Generic)
+    deriving anyclass (FromJSON, ToJSON)

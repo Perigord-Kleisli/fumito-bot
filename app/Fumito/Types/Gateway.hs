@@ -10,7 +10,7 @@ import Data.Time (UTCTime)
 import Fumito.Types.Channel (Channel)
 import Fumito.Types.Common
 import Fumito.Types.Guild (GuildMember)
-import Fumito.Types.Payload (MessageCreatePayload)
+import Fumito.Types.Payload
 import Fumito.Utils (deriveGappedJSONEnum)
 import Relude.Extra (safeToEnum)
 
@@ -234,6 +234,9 @@ data DispatchEvent
     | GUILD_CREATE GuildCreateStructure
     | TYPING_START TypingStartEvent
     | MESSAGE_CREATE MessageCreatePayload
+    | MESSAGE_EDIT MessageEditPayload
+    | MESSAGE_DELETE MessageDeletePayload
+    | MESSAGE_DELETE_BULK MessageDeleteBulkPayload
     deriving stock (Show, Generic)
 
 -- TODO: add the rest
@@ -254,6 +257,9 @@ instance FromJSON PayloadReceive where
                             "GUILD_CREATE" -> GUILD_CREATE <$> ob .: "d"
                             "TYPING_START" -> TYPING_START <$> ob .: "d"
                             "MESSAGE_CREATE" -> MESSAGE_CREATE <$> ob .: "d"
+                            "MESSAGE_EDIT" -> MESSAGE_EDIT <$> ob .: "d"
+                            "MESSAGE_DELETE" -> MESSAGE_DELETE <$> ob .: "d"
+                            "MESSAGE_DELETE_BULK" -> MESSAGE_DELETE_BULK <$> ob .: "d"
                             (e :: Text) -> fail [i|Unknown dispatch event '#{e}'|]
                         )
                     <*> ob
