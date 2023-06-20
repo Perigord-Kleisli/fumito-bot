@@ -28,6 +28,8 @@ import Data.Default (Default (def))
 import Data.String.Interpolate
 import Di qualified as D
 
+import Shower
+
 gateway :: (Members [Async, Di D.Level D.Path D.Message, Embed IO, Error GatewayException, FumitoGateway] r) => Sem r ()
 gateway = push "gateway" do
     notice @Text "Established connection with gateway"
@@ -43,7 +45,7 @@ gateway = push "gateway" do
             embed $ threadDelay $ fromInteger $ interval_ms * 1000
             sendHeartBeat
 
-    sendIdentity >>= print
+    sendIdentity >>= embed . printer
 
     void $ async do
         putStrLn "Type Input to close gateway"
@@ -54,8 +56,9 @@ gateway = push "gateway" do
     void $ infinitely do
         sendPayload (HeartBeatSend (Just 2))
         try receiveDispatchEvent >>= \case
-            Right (GUILD_CREATE n) -> print $ map permission_overwrites $ channels n
-            _ -> pass
+            Right n -> embed $ printer n
+            Left (EventMismatch _ _) -> pass
+            e -> print e
         embed $ threadDelay 1_000_000
 
 main :: IO ()

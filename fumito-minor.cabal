@@ -23,6 +23,7 @@ executable fumito
     Fumito.Types.Event
     Fumito.Types.Exception
     Fumito.Types.Gateway
+    Fumito.Types.Message
     Fumito.Types.Payload
     Fumito.Types.Guild
     Fumito.Types
@@ -50,6 +51,7 @@ executable fumito
     , req
     , string-interpolate
     , scientific
+    , shower
     , time
     , text
     , th-abstraction

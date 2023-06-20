@@ -2,6 +2,7 @@ module Fumito.Types.Channel where
 
 import Data.Aeson
 import Data.Aeson.TH (deriveJSON)
+import Data.Char (toLower)
 import Data.Time (UTCTime)
 import Fumito.Types.Common
 import Fumito.Types.Guild (GuildMember)
@@ -24,16 +25,16 @@ data ChannelType
     deriving stock (Show, Eq, Bounded)
 deriveGappedJSONEnum [('ANNOUNCEMENT_THREAD, 10)] ''ChannelType
 
-data OverwriteType = Role | Member deriving stock (Show, Enum, Bounded)
-deriveJSONFromEnum ''OverwriteType
+data OverwriteType = ROLE | MEMBER deriving stock (Show, Enum, Bounded)
+deriveJSON defaultOptions {constructorTagModifier = map toLower} ''OverwriteType
 
 data Overwrite = Overwrite
     { id :: Snowflake
-    , type_ :: Text
+    , type_ :: OverwriteType
     , allow :: Int
     , deny :: Int
     }
-    deriving stock (Show, Generic)
+    deriving stock (Show)
 deriveJSON
     defaultOptions {fieldLabelModifier = \case "type_" -> "type"; n -> n}
     ''Overwrite
@@ -131,7 +132,15 @@ data Channel = Channel
     , default_forum_layout :: Maybe ForumLayout
     }
     deriving stock (Show, Generic)
-
 deriveJSON
     defaultOptions {fieldLabelModifier = \case "type_" -> "type"; n -> n}
     ''Channel
+
+data ChannelMention = ChannelMention
+    { id :: Snowflake
+    , guild_id :: Snowflake
+    , type_ :: ChannelType
+    , name :: Text
+    }
+    deriving stock (Show, Eq)
+deriveJSON defaultOptions {constructorTagModifier = map toLower} ''ChannelMention

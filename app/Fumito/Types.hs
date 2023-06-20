@@ -11,14 +11,14 @@ module Fumito.Types (
 ) where
 
 import Control.Lens (makeLenses)
-import Di (Level, Message, Path)
+import Di qualified as D
 import DiPolysemy (Di)
 import Fumito.Types.Channel
 import Fumito.Types.Common
 import Fumito.Types.Exception
 import Fumito.Types.Gateway
 
-type Log = Di Level Message Path
+type Log = Di D.Level D.Message D.Path
 
 data FumitoState = FumitoState
     { _lastSequenceNum :: IORef (Maybe Integer)

@@ -1,9 +1,24 @@
 module Fumito.Types.Common where
 
 import Data.Aeson
+import Data.Aeson.Types (Parser)
 import Data.Bits
 import Data.Scientific (isFloating)
 import Relude.Extra (safeToEnum)
+
+data Nonce
+    = NonceText Text
+    | NonceNum Int
+    deriving stock Show
+
+instance ToJSON Nonce where
+    toJSON (NonceText x) = toJSON x
+    toJSON (NonceNum x) = toJSON x
+
+instance FromJSON Nonce where
+    parseJSON v =
+        (NonceText <$> parseJSON v)
+            <|> (NonceNum <$> parseJSON v)
 
 newtype Snowflake = Snowflake Word64
     deriving newtype (Ord, Eq, Num, Integral, Enum, Real, Bits, Read, Show)
@@ -17,14 +32,6 @@ instance FromJSON Snowflake where
             maybe (fail "Invalid Snowflake") pure
                 . readMaybe @Snowflake
                 . toString
-
-data Emoji = Emoji
-    { name :: Text
-    , id :: Maybe Snowflake
-    , animated :: Maybe Bool
-    }
-    deriving stock (Show, Generic)
-    deriving anyclass (ToJSON, FromJSON)
 
 data Party = Party
     { id :: Text
@@ -178,4 +185,77 @@ data User = User
     , public_flags :: Maybe Word32
     }
     deriving stock (Show, Eq, Generic)
+    deriving anyclass (ToJSON, FromJSON)
+
+data RoleTags = RoleTags
+    { bot_id :: Maybe Snowflake
+    , integration_id :: Maybe Snowflake
+    , premium_subscriber :: Bool
+    , subscription_listing_id :: Maybe Snowflake
+    , available_for_purchase :: Bool
+    , guild_connections :: Bool
+    }
+    deriving stock (Show)
+
+instance ToJSON RoleTags where
+    toJSON
+        ( RoleTags
+                { bot_id
+                , integration_id
+                , premium_subscriber
+                , subscription_listing_id
+                , available_for_purchase
+                , guild_connections
+                }
+            ) =
+            object $
+                [ "bot_id" .= bot_id
+                , "integration_id" .= integration_id
+                , "subscription_listing_id" .= subscription_listing_id
+                ]
+                    ++ (["premium_subscriber" .= Null | premium_subscriber])
+                    ++ (["available_for_purchase" .= Null | available_for_purchase])
+                    ++ (["guild_connections" .= Null | guild_connections])
+
+instance FromJSON RoleTags where
+    parseJSON = withObject "RoleTags" \ob ->
+        do
+            RoleTags
+            <$> ob
+            .: "bot_id"
+            <*> ob
+            .: "integration_id"
+            <*> fmap isJust (ob .: "premium_subscriber" :: Parser (Maybe ()))
+            <*> ob
+            .: "subscription_listing_id"
+            <*> fmap isJust (ob .: "available_for_purchase" :: Parser (Maybe ()))
+            <*> fmap isJust (ob .: "guild_connections" :: Parser (Maybe ()))
+
+data Role = Role
+    { id :: Snowflake
+    , name :: Text
+    , color :: Integer
+    , hoist :: Bool
+    , icon :: Maybe Text
+    , unicode_emoji :: Maybe Text
+    , position :: Int
+    , permissions :: Text
+    , managed :: Bool
+    , mentionable :: Bool
+    , tags :: Maybe RoleTags
+    }
+    deriving stock (Show, Generic)
+    deriving anyclass (FromJSON, ToJSON)
+
+data Emoji = Emoji
+    { name :: Text
+    , id :: Maybe Snowflake
+    , animated :: Maybe Bool
+    , roles :: Maybe [Role]
+    , user :: Maybe User
+    , require_colon :: Maybe Bool
+    , managed :: Maybe Bool
+    , available :: Maybe Bool
+    }
+    deriving stock (Show, Generic)
     deriving anyclass (ToJSON, FromJSON)

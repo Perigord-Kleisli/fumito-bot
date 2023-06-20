@@ -56,7 +56,7 @@ runFumitoGatewayToReader = interpret \case
             PS.modify
                 (fumito_resume_gateway_url ?~ resume_gateway_url)
             return dispatch
-        actOnInput dispatch@(Dispatch {s = s, d = _}) = do
+        actOnInput dispatch@(Dispatch {s}) = do
             PS.gets _lastSequenceNum >>= (`writeIORef` Just s)
             return dispatch
         actOnInput x = return x

@@ -87,6 +87,7 @@ deriveJSONFromEnum name = do
             toJSON = Number . fromIntegral . fromEnum
         |]
 
+-- | combination of @deriveEnumWithGaps@ and @deriveJSONFromEnum@
 deriveGappedJSONEnum :: [(Name, Integer)] -> Name -> Q [Dec]
 deriveGappedJSONEnum gaps name =
     (<>)

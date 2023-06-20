@@ -10,6 +10,8 @@ import Data.Time (UTCTime)
 import Fumito.Types.Channel (Channel)
 import Fumito.Types.Common
 import Fumito.Types.Guild (GuildMember)
+import Fumito.Types.Payload (MessageCreatePayload)
+import Fumito.Utils (deriveGappedJSONEnum)
 import Relude.Extra (safeToEnum)
 
 instance Default Text where
@@ -128,6 +130,79 @@ data GuildCreateVoiceState = GuildCreateVoiceState
     deriving stock (Show, Eq, Generic)
     deriving anyclass (FromJSON, ToJSON)
 
+data ClientStatus = ClientStatus
+    { desktop :: Maybe Text
+    , mobile :: Maybe Text
+    , web :: Maybe Text
+    }
+    deriving stock (Show, Generic)
+    deriving anyclass (FromJSON, ToJSON)
+
+data PrescenseUpdate = PrescenseUpdate
+    { user :: User
+    , guild_id :: Snowflake
+    , status :: Text
+    , activities :: [Activity]
+    , client_status :: ClientStatus
+    }
+    deriving stock (Show, Generic)
+    deriving anyclass (FromJSON, ToJSON)
+
+data PrivacyLevel = PUBLIC | GUILD_ONLY deriving stock (Show, Eq, Bounded)
+deriveGappedJSONEnum [('PUBLIC, 1)] ''PrivacyLevel
+
+data StageInstance = StageInstance
+    { id :: Snowflake
+    , guild_id :: Snowflake
+    , channel_id :: Snowflake
+    , topic :: Text
+    , privacy_level :: PrivacyLevel
+    , discoverable_disabled :: Maybe Bool
+    , guild_scheduled_event_id :: Maybe Snowflake
+    }
+    deriving stock (Show, Generic)
+    deriving anyclass (FromJSON, ToJSON)
+
+data EventStatus
+    = SCHEDULED
+    | ACTIVE
+    | COMPLETED
+    | CANCELLLED
+    deriving stock (Show, Eq, Bounded)
+deriveGappedJSONEnum [('SCHEDULED, 1)] ''EventStatus
+
+data GuildScheduledEntity
+    = STAGE_INSTANCE
+    | VOICE
+    | EXTERNAL
+    deriving stock (Show, Eq, Bounded)
+deriveGappedJSONEnum [('STAGE_INSTANCE, 1)] ''GuildScheduledEntity
+
+newtype EntityMetadata = EntityMetadata {location :: Maybe Text}
+    deriving stock (Show, Generic)
+    deriving anyclass (FromJSON, ToJSON)
+
+data GuildScheduledEvent = GuildScheduledEvent
+    { id :: Snowflake
+    , guild_id :: Snowflake
+    , channel_id :: Maybe Snowflake
+    , creator_id :: Maybe Snowflake
+    , name :: Text
+    , description :: Maybe Text
+    , scheduled_start_time :: UTCTime
+    , scheduled_end_time :: Maybe UTCTime
+    , privacy_level :: PrivacyLevel
+    , status :: EventStatus
+    , entity_type :: GuildScheduledEntity
+    , entity_id :: Maybe Snowflake
+    , entity_metadata :: Maybe EntityMetadata
+    , creator :: Maybe User
+    , user_count :: Maybe Integer
+    , image :: Maybe Text
+    }
+    deriving stock (Show, Generic)
+    deriving anyclass (FromJSON, ToJSON)
+
 data GuildCreateStructure = GuildCreateStructure
     { joined_at :: UTCTime
     , large :: Bool
@@ -136,6 +211,20 @@ data GuildCreateStructure = GuildCreateStructure
     , voice_states :: [GuildCreateVoiceState]
     , members :: [GuildMember]
     , channels :: [Channel]
+    , threads :: [Channel]
+    , presences :: [PrescenseUpdate]
+    , stage_instances :: [StageInstance]
+    , guild_scheduled_events :: [GuildScheduledEvent]
+    }
+    deriving stock (Show, Generic)
+    deriving anyclass (FromJSON, ToJSON)
+
+data TypingStartEvent = TypingStartEvent
+    { channel_id :: Snowflake
+    , guild_id :: Maybe Snowflake
+    , user_id :: Snowflake
+    , timestamp :: Int
+    , member :: Maybe GuildMember
     }
     deriving stock (Show, Generic)
     deriving anyclass (FromJSON, ToJSON)
@@ -143,6 +232,8 @@ data GuildCreateStructure = GuildCreateStructure
 data DispatchEvent
     = READY ReadyStructure
     | GUILD_CREATE GuildCreateStructure
+    | TYPING_START TypingStartEvent
+    | MESSAGE_CREATE MessageCreatePayload
     deriving stock (Show, Generic)
 
 -- TODO: add the rest
@@ -161,14 +252,16 @@ instance FromJSON PayloadReceive where
                     <$> ( ob .: "t" >>= \case
                             "READY" -> READY <$> ob .: "d"
                             "GUILD_CREATE" -> GUILD_CREATE <$> ob .: "d"
+                            "TYPING_START" -> TYPING_START <$> ob .: "d"
+                            "MESSAGE_CREATE" -> MESSAGE_CREATE <$> ob .: "d"
                             (e :: Text) -> fail [i|Unknown dispatch event '#{e}'|]
                         )
                     <*> ob
-                        .: "s"
+                    .: "s"
             1 ->
                 HeartbeatReceive
                     <$> ob
-                        .: "d"
+                    .: "d"
             10 ->
                 (ob .: "d") >>= withObject "Hello Event" (fmap HelloEvent . (.: "heartbeat_interval"))
             11 -> return HeartBeatAck
