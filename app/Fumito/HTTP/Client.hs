@@ -3,7 +3,7 @@ module Fumito.HTTP.Client where
 import Polysemy
 import Polysemy.Req
 
-import Data.String.Interpolation
+import Data.String.Interpolate
 
 import Data.ByteString qualified as B
 
@@ -15,8 +15,9 @@ reqMain = do
         (https "discord.com" /: "api" /: "v10" /: "channels" /: "951452676665794603")
         NoReqBody
         bsResponse
-        (header "Authorization" [i|Bot ${token}])
+        (header "Authorization" [i|Bot #{token}|])
         >>= print . responseBody
 
+runReqMain :: IO ()
 runReqMain = do
     runM $ interpretReqWith defaultHttpConfig reqMain

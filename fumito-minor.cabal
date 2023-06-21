@@ -16,18 +16,20 @@ executable fumito
   other-modules:
     Polysemy.Websocket
     Polysemy.Req
+    Fumito.Client.Types
     Fumito.Gateway
+    Fumito.Gateway.Dispatch
+    Fumito.Gateway.Types
+    Fumito.Gateway.Shard
     Fumito.Utils
     Fumito.HTTP.Client
     Fumito.Types.Channel
     Fumito.Types.Common
     Fumito.Types.Event
     Fumito.Types.Exception
-    Fumito.Types.Gateway
     Fumito.Types.Message
     Fumito.Types.Payload
     Fumito.Types.Guild
-    Fumito.Types
 
   mixins:
     base hiding (Prelude),
@@ -38,7 +40,6 @@ executable fumito
     , aeson
     , base                ^>=4.16.1.0
     , bytestring
-    , data-default
     , di
     , di-core
     , di-polysemy
@@ -70,6 +71,7 @@ executable fumito
     -Wincomplete-record-updates -Wincomplete-uni-patterns
     -Wmissing-deriving-strategies -Wunused-foralls -Wunused-foralls
     -fprint-explicit-foralls -fprint-explicit-kinds
+    -fhide-source-paths -freverse-errors
 
   default-language:   GHC2021
   default-extensions:
@@ -88,6 +90,7 @@ executable fumito
     LambdaCase
     OverloadedRecordDot
     OverloadedStrings
+    OverloadedLabels
     PolyKinds
     QuasiQuotes
     RankNTypes

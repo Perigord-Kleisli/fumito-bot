@@ -1,21 +1,14 @@
-{-# OPTIONS_GHC -Wno-orphans #-}
-
-module Fumito.Types.Gateway where
+module Fumito.Gateway.Types where
 
 import Data.Aeson
-import Data.Default
-import Data.Scientific
 import Data.String.Interpolate
 import Data.Time (UTCTime)
 import Fumito.Types.Channel (Channel)
 import Fumito.Types.Common
 import Fumito.Types.Guild (GuildMember)
 import Fumito.Types.Payload
-import Fumito.Utils (deriveGappedJSONEnum)
+import Fumito.Utils
 import Relude.Extra (safeToEnum)
-
-instance Default Text where
-    def = ""
 
 data ConnectionProperties = ConnnectionProperties
     { os :: Text
@@ -23,7 +16,7 @@ data ConnectionProperties = ConnnectionProperties
     , device :: Text
     }
     deriving stock (Show, Eq, Generic)
-    deriving anyclass (ToJSON, FromJSON, Default)
+    deriving anyclass (ToJSON, FromJSON)
 
 data ActivityType
     = Game
@@ -33,14 +26,7 @@ data ActivityType
     | Custom
     | Competing
     deriving stock (Show, Enum, Bounded)
-
-instance ToJSON ActivityType where
-    toJSON = Number . fromIntegral . fromEnum
-
-instance FromJSON ActivityType where
-    parseJSON = withScientific "Activity Type" \n -> do
-        when (isFloating n) do fail "Expected Integer Value"
-        maybe (fail ("Unknown opcode: " ++ show n)) pure $ safeToEnum $ floor n
+deriveJSONFromEnum ''ActivityType
 
 data Timestamps = TimeStamps
     { start :: Maybe Integer
@@ -87,7 +73,7 @@ data IdentifyStructure = IdentifyStructure
     , intents :: Word32
     }
     deriving stock (Show, Generic)
-    deriving anyclass (FromJSON, ToJSON, Default)
+    deriving anyclass (FromJSON, ToJSON)
 
 data PayloadSend
     = HeartBeatSend {last_sequence_num :: Maybe Integer}
@@ -263,11 +249,11 @@ instance FromJSON PayloadReceive where
                             (e :: Text) -> fail [i|Unknown dispatch event '#{e}'|]
                         )
                     <*> ob
-                    .: "s"
+                        .: "s"
             1 ->
                 HeartbeatReceive
                     <$> ob
-                    .: "d"
+                        .: "d"
             10 ->
                 (ob .: "d") >>= withObject "Hello Event" (fmap HelloEvent . (.: "heartbeat_interval"))
             11 -> return HeartBeatAck

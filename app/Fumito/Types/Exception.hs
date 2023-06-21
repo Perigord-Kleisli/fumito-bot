@@ -1,7 +1,7 @@
 module Fumito.Types.Exception where
 
 import Data.String.Interpolate (i, __i)
-import Fumito.Types.Gateway (PayloadReceive)
+import Fumito.Gateway.Types (PayloadReceive)
 import GHC.Show (Show (show))
 import Network.WebSockets (ConnectionException)
 

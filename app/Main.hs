@@ -1,8 +1,8 @@
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
+
 module Main (main) where
 
 import Prelude hiding (Reader, runReader)
-
-import Fumito.Types
 
 import GHC.Conc
 import System.Random
@@ -20,14 +20,29 @@ import Polysemy.Async
 import Polysemy.Error
 import Polysemy.Websocket
 
-import Fumito.Gateway
-
 import Control.Exception (throwIO)
 
-import Data.Default (Default (def))
 import Data.String.Interpolate
 import Di qualified as D
 
+import Fumito.Client.Types
+import Fumito.Gateway (
+    FumitoGateway,
+    closeGateway,
+    receiveDispatchEvent,
+    receiveHelloEvent,
+    runFumitoGateway,
+    sendHeartBeat,
+    sendIdentity,
+    sendPayload,
+ )
+import Fumito.Gateway.Types (
+    ConnectionProperties (..),
+    IdentifyStructure (..),
+    PayloadSend (..),
+    UpdatePrescense (..),
+ )
+import Fumito.Types.Exception
 import Shower
 
 gateway :: (Members [Async, Di D.Level D.Path D.Message, Embed IO, Error GatewayException, FumitoGateway] r) => Sem r ()
@@ -63,16 +78,31 @@ gateway = push "gateway" do
 
 main :: IO ()
 main = do
-    _token <- BS.init <$> readFileBS "Token.dat"
-    let _identity =
-            def
-                { token = decodeUtf8 _token
-                , properties = def {os = "linux"}
+    token <- decodeUtf8 . BS.init <$> readFileBS "Token.dat"
+    let identity =
+            IdentifyStructure
+                { token
+                , properties =
+                    ConnnectionProperties
+                        { os = "linux"
+                        , browser = ""
+                        , device = ""
+                        }
                 , intents = 3665
                 , shard = Just (0, 1)
+                , compress = Nothing
+                , large_treshold = Nothing
+                , presence =
+                    Just $
+                        UpdatePrescense
+                            { since = Nothing
+                            , afk = False
+                            , activities = []
+                            , status = "being cool"
+                            }
                 }
-    _lastSequenceNum <- newIORef Nothing
-    let botOpts = FumitoState {_lastSequenceNum, _identity, _fumito_resume_gateway_url = Nothing}
+    lastSequenceNum <- newIORef Nothing
+    let botOpts = FumitoState {lastSequenceNum, identity, fumito_resume_gateway_url = Nothing}
     runSecureClientWith
         "gateway.discord.gg"
         443

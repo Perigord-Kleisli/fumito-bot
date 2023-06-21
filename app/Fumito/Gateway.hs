@@ -1,14 +1,17 @@
+{-# LANGUAGE OverloadedLabels #-}
+
 module Fumito.Gateway where
 
-import Prelude hiding (Reader, ask, asks)
-
-import Control.Lens ((?~))
+import Control.Lens
 import Data.Aeson (eitherDecode, eitherDecode', encode)
 import Data.Aeson.Types (FromJSON)
+import Data.Generics.Labels ()
 import Data.String.Interpolate
 import Di qualified as D
 import DiPolysemy
-import Fumito.Types
+import Fumito.Client.Types
+import Fumito.Gateway.Types
+import Fumito.Types.Exception
 import Network.WebSockets qualified as NW
 import Polysemy
 import Polysemy.Error
@@ -51,22 +54,24 @@ runFumitoGatewayToReader = interpret \case
     CloseGateway message -> do
         sendClose message
     where
+        actOnInput :: PayloadReceive -> Sem r PayloadReceive
         actOnInput dispatch@(Dispatch {s = s, d = READY (ReadyStructure {resume_gateway_url})}) = do
-            PS.gets _lastSequenceNum >>= (`writeIORef` Just s)
-            PS.modify
-                (fumito_resume_gateway_url ?~ resume_gateway_url)
+            PS.gets lastSequenceNum >>= (`writeIORef` Just s)
+            PS.modify (#fumito_resume_gateway_url ?~ resume_gateway_url)
             return dispatch
         actOnInput dispatch@(Dispatch {s}) = do
-            PS.gets _lastSequenceNum >>= (`writeIORef` Just s)
+            PS.gets lastSequenceNum >>= (`writeIORef` Just s)
             return dispatch
         actOnInput x = return x
 
+--
 runFumitoGateway :: Members GatewayEffects r => FumitoState -> Sem (FumitoGateway ': r) a -> Sem r a
 runFumitoGateway fumitoOpts = PS.evalLazyState fumitoOpts . runFumitoGatewayToReader . raiseUnder
 
+--
 sendIdentity :: Member FumitoGateway r => Sem r PayloadReceive
 sendIdentity = do
-    ident <- _identity <$> getFumitoState
+    ident <- (^. #identity) <$> getFumitoState
     sendPayload (Identify ident)
     receivePayload
 
@@ -84,7 +89,7 @@ receiveHelloEvent = do
 
 sendHeartBeat :: Members '[Embed IO, Di D.Level D.Path D.Message, FumitoGateway] r => Sem r ()
 sendHeartBeat = do
-    last_s <- embed . readIORef . _lastSequenceNum =<< getFumitoState
+    last_s <- embed . readIORef . lastSequenceNum =<< getFumitoState
     sendPayload (HeartBeatSend last_s)
     let last_s' = maybe "null" (show @Text) last_s
     info @Text [i|Sent heartbeat event with sequence number `#{last_s'}`|]
