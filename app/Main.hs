@@ -23,18 +23,16 @@ import Polysemy.Websocket
 import Control.Exception (throwIO)
 
 import Data.String.Interpolate
-import Di qualified as D
-
 import Fumito.Client.Types
 import Fumito.Gateway (
-    FumitoGateway,
+    GatewayEffC,
     closeGateway,
     receiveDispatchEvent,
     receiveHelloEvent,
-    runFumitoGateway,
+    runGateway,
     sendHeartBeat,
     sendIdentity,
-    sendPayload,
+    sendPayload, heartBeatLoop,
  )
 import Fumito.Gateway.Types (
     ConnectionProperties (..),
@@ -43,22 +41,21 @@ import Fumito.Gateway.Types (
     UpdatePrescense (..),
  )
 import Fumito.Types.Exception
+import Polysemy.Reader (runReader)
 import Shower
 
-gateway :: (Members [Async, Di D.Level D.Path D.Message, Embed IO, Error GatewayException, FumitoGateway] r) => Sem r ()
+gateway :: GatewayEffC r => Sem r ()
 gateway = push "gateway" do
     notice @Text "Established connection with gateway"
 
-    interval_ms <- receiveHelloEvent
+    interval_ms <- fmap (*1000) receiveHelloEvent
     info @Text [i|Received heartbeat interval: #{interval_ms}ms|]
 
     void $ push "heartbeat" $ async do
         jitter <- randomRIO @Float (0, 1)
-        embed $ threadDelay $ floor $ fromIntegral interval_ms * jitter * 1000
+        embed $ threadDelay $ floor $ fromIntegral interval_ms * jitter
         sendHeartBeat
-        infinitely do
-            embed $ threadDelay $ fromInteger $ interval_ms * 1000
-            sendHeartBeat
+        heartBeatLoop interval_ms
 
     sendIdentity >>= embed . printer
 
@@ -101,8 +98,7 @@ main = do
                             , status = "being cool"
                             }
                 }
-    lastSequenceNum <- newIORef Nothing
-    let botOpts = FumitoState {lastSequenceNum, identity, fumito_resume_gateway_url = Nothing}
+    let botOpts = FumitoOpts {identity}
     runSecureClientWith
         "gateway.discord.gg"
         443
@@ -116,5 +112,6 @@ main = do
                         . asyncToIO
                         . runDiToIO di
                         . runWSToIO connection
-                        $ runFumitoGateway botOpts gateway
+                        . runReader botOpts
+                        $ runGateway gateway
                     )

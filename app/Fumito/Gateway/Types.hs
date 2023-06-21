@@ -76,7 +76,7 @@ data IdentifyStructure = IdentifyStructure
     deriving anyclass (FromJSON, ToJSON)
 
 data PayloadSend
-    = HeartBeatSend {last_sequence_num :: Maybe Integer}
+    = HeartBeatSend {seqNum :: Maybe Int}
     | Identify IdentifyStructure
     deriving stock (Show)
 
@@ -227,9 +227,9 @@ data DispatchEvent
 
 -- TODO: add the rest
 data PayloadReceive
-    = Dispatch {d :: DispatchEvent, s :: Integer}
+    = Dispatch {d :: DispatchEvent, s :: Int}
     | HeartbeatReceive {last_sequence_num :: Maybe Integer}
-    | HelloEvent {heartbeat_interval :: Integer}
+    | HelloEvent {heartbeat_interval :: Int}
     | HeartBeatAck
     deriving stock (Show)
 
@@ -249,11 +249,11 @@ instance FromJSON PayloadReceive where
                             (e :: Text) -> fail [i|Unknown dispatch event '#{e}'|]
                         )
                     <*> ob
-                        .: "s"
+                    .: "s"
             1 ->
                 HeartbeatReceive
                     <$> ob
-                        .: "d"
+                    .: "d"
             10 ->
                 (ob .: "d") >>= withObject "Hello Event" (fmap HelloEvent . (.: "heartbeat_interval"))
             11 -> return HeartBeatAck

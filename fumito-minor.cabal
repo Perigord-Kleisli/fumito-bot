@@ -38,6 +38,7 @@ executable fumito
 
   build-depends:
     , aeson
+    , async
     , base                ^>=4.16.1.0
     , bytestring
     , di

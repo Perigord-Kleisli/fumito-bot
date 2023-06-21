@@ -4,6 +4,8 @@ import Data.Aeson
 import Data.Aeson.Types (Parser)
 import Data.Bits
 import Data.Scientific (isFloating)
+import Di qualified as D
+import DiPolysemy qualified as DP
 import Relude.Extra (safeToEnum)
 
 data Nonce
@@ -222,12 +224,12 @@ instance FromJSON RoleTags where
         do
             RoleTags
             <$> ob
-                .: "bot_id"
+            .: "bot_id"
             <*> ob
-                .: "integration_id"
+            .: "integration_id"
             <*> fmap isJust (ob .: "premium_subscriber" :: Parser (Maybe ()))
             <*> ob
-                .: "subscription_listing_id"
+            .: "subscription_listing_id"
             <*> fmap isJust (ob .: "available_for_purchase" :: Parser (Maybe ()))
             <*> fmap isJust (ob .: "guild_connections" :: Parser (Maybe ()))
 
@@ -259,3 +261,5 @@ data Emoji = Emoji
     }
     deriving stock (Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
+
+type LogEff = DP.Di D.Level D.Path D.Message
