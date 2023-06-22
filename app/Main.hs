@@ -5,7 +5,6 @@ module Main (main) where
 import Prelude hiding (Reader, runReader)
 
 import GHC.Conc
-import System.Random
 
 import Network.WebSockets (defaultConnectionOptions)
 import Wuss
@@ -22,23 +21,20 @@ import Polysemy.Websocket
 
 import Control.Exception (throwIO)
 
-import Data.String.Interpolate
 import Fumito.Client.Types
-import Fumito.Gateway (
+import Fumito.Gateway.Shard (
     GatewayEffC,
     closeGateway,
     receiveDispatchEvent,
     receiveHelloEvent,
     runGateway,
-    sendHeartBeat,
     sendIdentity,
-    sendPayload, heartBeatLoop,
+    sendPayload,
  )
 import Fumito.Gateway.Types (
     ConnectionProperties (..),
     IdentifyStructure (..),
     PayloadSend (..),
-    UpdatePrescense (..),
  )
 import Fumito.Types.Exception
 import Polysemy.Reader (runReader)
@@ -47,31 +43,23 @@ import Shower
 gateway :: GatewayEffC r => Sem r ()
 gateway = push "gateway" do
     notice @Text "Established connection with gateway"
-
-    interval_ms <- fmap (*1000) receiveHelloEvent
-    info @Text [i|Received heartbeat interval: #{interval_ms}ms|]
-
-    void $ push "heartbeat" $ async do
-        jitter <- randomRIO @Float (0, 1)
-        embed $ threadDelay $ floor $ fromIntegral interval_ms * jitter
-        sendHeartBeat
-        heartBeatLoop interval_ms
+    receiveHelloEvent
 
     sendIdentity >>= embed . printer
 
-    void $ async do
-        putStrLn "Type Input to close gateway"
-        void $ embed getLine
-        notice @Text "Closing Gateway Connection"
-        closeGateway ("Disconnected" :: Text)
-
-    void $ infinitely do
+    loop <- async $ infinitely do
         sendPayload (HeartBeatSend (Just 2))
         try receiveDispatchEvent >>= \case
             Right n -> embed $ printer n
             Left (EventMismatch _ _) -> pass
             e -> print e
         embed $ threadDelay 1_000_000
+
+    putStrLn "Type Input to close gateway"
+    void $ embed getLine
+    notice @Text "Closing Gateway Connection"
+    cancel loop
+    closeGateway ("Disconnected" :: Text)
 
 main :: IO ()
 main = do
@@ -89,15 +77,9 @@ main = do
                 , shard = Just (0, 1)
                 , compress = Nothing
                 , large_treshold = Nothing
-                , presence =
-                    Just $
-                        UpdatePrescense
-                            { since = Nothing
-                            , afk = False
-                            , activities = []
-                            , status = "being cool"
-                            }
+                , presence = Nothing
                 }
+
     let botOpts = FumitoOpts {identity}
     runSecureClientWith
         "gateway.discord.gg"

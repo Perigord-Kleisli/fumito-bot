@@ -17,7 +17,6 @@ executable fumito
     Polysemy.Websocket
     Polysemy.Req
     Fumito.Client.Types
-    Fumito.Gateway
     Fumito.Gateway.Dispatch
     Fumito.Gateway.Types
     Fumito.Gateway.Shard
