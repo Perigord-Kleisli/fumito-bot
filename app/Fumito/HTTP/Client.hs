@@ -7,7 +7,7 @@ import Fumito.HTTP.Types
 import Fumito.Types.Channel
 import Fumito.Types.Common (Snowflake, snowflakeToText)
 import Fumito.Types.Message
-import Polysemy (interpret, makeSem, Sem, Members)
+import Polysemy (Members, Sem, interpret, makeSem)
 import Polysemy.Reader qualified as PR
 import Polysemy.Req
 
@@ -20,14 +20,14 @@ data ChannelRequest m a where
     GetChannelMessage :: Snowflake -> Snowflake -> ChannelRequest m (JsonResponse Message)
     CreateMessage :: Snowflake -> MessageCreateForm -> ChannelRequest m (JsonResponse Message)
     EditMessage :: Snowflake -> Snowflake -> MessageEditForm -> ChannelRequest m (JsonResponse Message)
-    DeleteMessage :: Snowflake -> Snowflake -> ChannelRequest m (JsonResponse ())
-    BulkDeleteMessage :: Snowflake -> [Snowflake] -> ChannelRequest m (JsonResponse ())
+    DeleteMessage :: Snowflake -> Snowflake -> ChannelRequest m IgnoreResponse
+    BulkDeleteMessage :: Snowflake -> [Snowflake] -> ChannelRequest m IgnoreResponse
 makeSem ''ChannelRequest
 
 runChannelRequest :: Members '[PR.Reader FumitoOpts, Req] r => Sem (ChannelRequest ': r) a -> Sem r a
 runChannelRequest expr = do
     token <- PR.asks (token . Fumito.Bot.Types.identity)
-    let tokenHeader :: Option 'Https = header "token" ("bot " <> encodeUtf8 token)
+    let tokenHeader :: Option 'Https = header "Authorization" ("Bot " <> encodeUtf8 token)
     ($ expr) $ interpret \case
         (GetChannel chanid) -> do
             req
@@ -59,7 +59,7 @@ runChannelRequest expr = do
                 tokenHeader
         (EditMessage chanid msgid form) ->
             req
-                POST
+                PATCH
                 (baseURL /: snowflakeToText chanid /: "messages" /: snowflakeToText msgid)
                 (ReqBodyJson form)
                 jsonResponse
@@ -69,12 +69,12 @@ runChannelRequest expr = do
                 DELETE
                 (baseURL /: snowflakeToText chanid /: "messages" /: snowflakeToText msgid)
                 NoReqBody
-                jsonResponse
+                ignoreResponse
                 tokenHeader
         (BulkDeleteMessage chanid msgids) ->
             req
                 DELETE
                 (baseURL /: snowflakeToText chanid /: "messages" /: "bulk-delete")
                 (ReqBodyJson $ object ["messages" .= msgids])
-                jsonResponse
+                ignoreResponse
                 tokenHeader

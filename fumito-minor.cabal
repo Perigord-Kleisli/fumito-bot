@@ -49,6 +49,7 @@ executable fumito
     , lens
     , mtl
     , network
+    , parsec
     , polysemy
     , polysemy-plugin
     , random
@@ -62,7 +63,6 @@ executable fumito
     , th-abstraction
     , template-haskell
     , transformers
-    , unagi-chan
     , websockets
     , wuss
 

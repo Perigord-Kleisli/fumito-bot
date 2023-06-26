@@ -1,8 +1,8 @@
 module Fumito.HTTP.Types (
     Request (..),
     JSONRequest (..),
-    MessageCreateForm,
-    MessageEditForm,
+    MessageCreateForm (..),
+    MessageEditForm (..),
 ) where
 
 import Control.Lens (ix, (%~))

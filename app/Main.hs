@@ -4,8 +4,6 @@ module Main (main) where
 
 import Prelude hiding (Reader, runReader)
 
-import GHC.Conc
-
 import Network.WebSockets (defaultConnectionOptions)
 import Wuss
 
@@ -25,43 +23,146 @@ import Fumito.Bot.Types
 import Fumito.Gateway.Shard (
     GatewayEff,
     closeGateway,
-    receiveDispatchEvent,
     receiveHelloEvent,
+    receivePayload,
     runGateway,
     sendIdentity,
-    sendPayload,
  )
 import Fumito.Gateway.Types (
     ConnectionProperties (..),
     IdentifyStructure (..),
-    PayloadSend (..),
  )
 import Fumito.HTTP.Client
-import Fumito.Types.Exception
+import Fumito.HTTP.Types
 import Polysemy.Reader (runReader)
-import Polysemy.Req (interpretReq)
+import Polysemy.Req (interpretReq, responseBody)
 import Shower
+import System.Console.Haskeline
 
-bot :: Members (ChannelRequest ': GatewayEff) r => Sem r ()
+import Control.Concurrent
+import Control.Monad.State qualified as ST
+import Data.String.Interpolate
+
+import Fumito.Types.Common (Snowflake (Snowflake))
+import Text.Parsec hiding (try, (<|>))
+import Text.Parsec.Token (GenLanguageDef (..), GenTokenParser (..), makeTokenParser)
+
+bot :: forall r. Members (ChannelRequest ': GatewayEff) r => Sem r ()
 bot = push "gateway" do
     notice @Text "Established connection with gateway"
     receiveHelloEvent
 
     sendIdentity >>= embed . printer
 
-    loop <- async $ infinitely do
-        sendPayload (HeartBeatSend (Just 2))
-        try receiveDispatchEvent >>= \case
-            Right n -> embed $ printer n
-            Left (EventMismatch _ _) -> pass
-            e -> print e
-        embed $ threadDelay 400_000
+    replChan <- embed newChan
 
-    putStrLn "Type Input to close gateway"
-    void getLine
+    replLoop <- async $ infinitely do
+        join $ embed $ readChan replChan
+
+    putStrLn "Input initial channel id"
+    chan_id <- either Prelude.error id . readEither . toString <$> getLine
+    embed $ flip evalStateT (Snowflake chan_id) $ runInputT defaultSettings (loop replChan)
+    cancel replLoop
     notice @Text "Closing Gateway Connection"
-    cancel loop
     closeGateway ("Disconnected" :: Text)
+    where
+        helpText =
+            [__i|
+            Fumito Commands
+            --------------------------------------------------------
+            help                          --   get help message
+            quit|:q                       --   close bot
+            getEvent                      --   get an event and print it
+            channel <channel_id>          --   switch channel
+            send <string>                 --   send message in channel
+            edit <message_id> <string>    --   edit message in channel
+            delete <message_id>           --   delete message in channel
+            |]
+        loop :: Chan (Sem r ()) -> InputT (StateT Snowflake IO) ()
+        loop chan = do
+            input <- getInputLine "fumito> "
+            whenJust input \input' -> case runParser repl () "Fumito REPL" input' of
+                Left _ -> do
+                    outputStrLn [i|Unknown input "#{input'}"|]
+                    outputStrLn helpText
+                    loop chan
+                Right x -> x
+            where
+                TokenParser {reserved, integer, lexeme} =
+                    makeTokenParser
+                        LanguageDef
+                            { reservedNames =
+                                ["quit", "help", "getEvent", "channel", "send"]
+                                    <> ["edit", "delete"]
+                            , reservedOpNames = []
+                            , opStart = oneOf ":!#$%&*+./<=>?@\\^|-~"
+                            , opLetter = oneOf ":!#$%&*+./<=>?@\\^|-~"
+                            , nestedComments = True
+                            , identStart = letter <|> char '_'
+                            , identLetter = alphaNum <|> char '_'
+                            , commentStart = "/*"
+                            , commentLine = "#"
+                            , commentEnd = "*/"
+                            , caseSensitive = False
+                            }
+                snowflakeP = Snowflake . fromInteger <$> integer
+                repl =
+                    choice
+                        [ ((string "quit" <|> string ":q") <* eof) $> pass
+                        , (string "help" <* eof) $> do
+                            outputStrLn helpText
+                            loop chan
+                        , (string "getEvent" <* eof) $> do
+                            liftIO $ writeChan chan do
+                                receivePayload >>= embed . printer
+                            loop chan
+                        , (reserved "channel" *> snowflakeP <* eof) <&> \id -> do
+                            lift $ ST.put id
+                            outputStrLn "switched to channel: "
+                            liftIO $ writeChan chan do
+                                getChannel id >>= embed . printer . responseBody
+                            loop chan
+                        , (reserved "delete" *> snowflakeP <* eof) <&> \msg_id -> do
+                            chan_id <- lift ST.get
+                            liftIO $ writeChan chan do
+                                void $ deleteMessage chan_id msg_id
+                            loop chan
+                        , ((,) <$> lexeme (reserved "edit" *> snowflakeP) <*> (many1 anyChar <* eof))
+                            <&> \(msg_id, new_conts) -> do
+                                chan_id <- lift ST.get
+                                liftIO $ writeChan chan do
+                                    void $
+                                        editMessage
+                                            chan_id
+                                            msg_id
+                                            MessageEditForm
+                                                { allowed_mentions = Nothing
+                                                , embeds = Nothing
+                                                , content = fromString new_conts
+                                                , components = Nothing
+                                                , flags = 1
+                                                }
+                                loop chan
+                        , (reserved "send" *> many1 anyChar <* eof) <&> \message -> do
+                            chan_id <- lift ST.get
+                            liftIO $ writeChan chan do
+                                void $
+                                    createMessage
+                                        chan_id
+                                        MessageCreateForm
+                                            { content = Just (fromString message)
+                                            , tts = False
+                                            , embeds = Nothing
+                                            , nonce = Nothing
+                                            , allowed_mentions = Nothing
+                                            , message_reference = Nothing
+                                            , components = Nothing
+                                            , sticker_ids = Nothing
+                                            , flags = 1
+                                            }
+                            loop chan
+                        , (spaces <* eof) $> loop chan
+                        ]
 
 main :: IO ()
 main = do
