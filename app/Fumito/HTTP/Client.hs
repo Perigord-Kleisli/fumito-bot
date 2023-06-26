@@ -1,23 +1,80 @@
 module Fumito.HTTP.Client where
 
-import Polysemy
+import Data.Aeson
+import Fumito.Bot.Types (FumitoOpts (..))
+import Fumito.Gateway.Types
+import Fumito.HTTP.Types
+import Fumito.Types.Channel
+import Fumito.Types.Common (Snowflake, snowflakeToText)
+import Fumito.Types.Message
+import Polysemy (interpret, makeSem, Sem, Members)
+import Polysemy.Reader qualified as PR
 import Polysemy.Req
 
-import Data.String.Interpolate
+baseURL :: Url 'Https
+baseURL = https "discord.com" /: "api" /: "v10" /: "channels"
 
-import Data.ByteString qualified as B
+data ChannelRequest m a where
+    GetChannel :: Snowflake -> ChannelRequest m (JsonResponse Channel)
+    GetChannelMessages :: Snowflake -> ChannelRequest m (JsonResponse [Message])
+    GetChannelMessage :: Snowflake -> Snowflake -> ChannelRequest m (JsonResponse Message)
+    CreateMessage :: Snowflake -> MessageCreateForm -> ChannelRequest m (JsonResponse Message)
+    EditMessage :: Snowflake -> Snowflake -> MessageEditForm -> ChannelRequest m (JsonResponse Message)
+    DeleteMessage :: Snowflake -> Snowflake -> ChannelRequest m (JsonResponse ())
+    BulkDeleteMessage :: Snowflake -> [Snowflake] -> ChannelRequest m (JsonResponse ())
+makeSem ''ChannelRequest
 
-reqMain :: Members [Embed IO, Req] r => Sem r ()
-reqMain = do
-    token <- B.init <$> readFileBS "Token.dat"
-    req
-        GET
-        (https "discord.com" /: "api" /: "v10" /: "channels" /: "951452676665794603")
-        NoReqBody
-        bsResponse
-        (header "Authorization" [i|Bot #{token}|])
-        >>= print . responseBody
-
-runReqMain :: IO ()
-runReqMain = do
-    runM $ interpretReqWith defaultHttpConfig reqMain
+runChannelRequest :: Members '[PR.Reader FumitoOpts, Req] r => Sem (ChannelRequest ': r) a -> Sem r a
+runChannelRequest expr = do
+    token <- PR.asks (token . Fumito.Bot.Types.identity)
+    let tokenHeader :: Option 'Https = header "token" ("bot " <> encodeUtf8 token)
+    ($ expr) $ interpret \case
+        (GetChannel chanid) -> do
+            req
+                GET
+                (baseURL /: snowflakeToText chanid)
+                NoReqBody
+                jsonResponse
+                tokenHeader
+        (GetChannelMessages chanid) ->
+            req
+                GET
+                (baseURL /: snowflakeToText chanid /: "messages")
+                NoReqBody
+                jsonResponse
+                tokenHeader
+        (GetChannelMessage chanid msgid) ->
+            req
+                GET
+                (baseURL /: snowflakeToText chanid /: "messages" /: snowflakeToText msgid)
+                NoReqBody
+                jsonResponse
+                tokenHeader
+        (CreateMessage chanid form) ->
+            req
+                POST
+                (baseURL /: snowflakeToText chanid /: "messages")
+                (ReqBodyJson form)
+                jsonResponse
+                tokenHeader
+        (EditMessage chanid msgid form) ->
+            req
+                POST
+                (baseURL /: snowflakeToText chanid /: "messages" /: snowflakeToText msgid)
+                (ReqBodyJson form)
+                jsonResponse
+                tokenHeader
+        (DeleteMessage chanid msgid) ->
+            req
+                DELETE
+                (baseURL /: snowflakeToText chanid /: "messages" /: snowflakeToText msgid)
+                NoReqBody
+                jsonResponse
+                tokenHeader
+        (BulkDeleteMessage chanid msgids) ->
+            req
+                DELETE
+                (baseURL /: snowflakeToText chanid /: "messages" /: "bulk-delete")
+                (ReqBodyJson $ object ["messages" .= msgids])
+                jsonResponse
+                tokenHeader

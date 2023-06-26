@@ -1,4 +1,4 @@
-module Fumito.Client.Types where
+module Fumito.Bot.Types where
 
 import Fumito.Gateway.Types
 

@@ -21,9 +21,9 @@ import Polysemy.Websocket
 
 import Control.Exception (throwIO)
 
-import Fumito.Client.Types
+import Fumito.Bot.Types
 import Fumito.Gateway.Shard (
-    GatewayEffC,
+    GatewayEff,
     closeGateway,
     receiveDispatchEvent,
     receiveHelloEvent,
@@ -36,12 +36,14 @@ import Fumito.Gateway.Types (
     IdentifyStructure (..),
     PayloadSend (..),
  )
+import Fumito.HTTP.Client
 import Fumito.Types.Exception
 import Polysemy.Reader (runReader)
+import Polysemy.Req (interpretReq)
 import Shower
 
-gateway :: GatewayEffC r => Sem r ()
-gateway = push "gateway" do
+bot :: Members (ChannelRequest ': GatewayEff) r => Sem r ()
+bot = push "gateway" do
     notice @Text "Established connection with gateway"
     receiveHelloEvent
 
@@ -53,10 +55,10 @@ gateway = push "gateway" do
             Right n -> embed $ printer n
             Left (EventMismatch _ _) -> pass
             e -> print e
-        embed $ threadDelay 1_000_000
+        embed $ threadDelay 400_000
 
     putStrLn "Type Input to close gateway"
-    void $ embed getLine
+    void getLine
     notice @Text "Closing Gateway Connection"
     cancel loop
     closeGateway ("Disconnected" :: Text)
@@ -90,10 +92,12 @@ main = do
         \connection -> new \di ->
             either throwIO pure
                 =<< ( runM
+                        . interpretReq
                         . runError
                         . asyncToIO
                         . runDiToIO di
                         . runWSToIO connection
                         . runReader botOpts
-                        $ runGateway gateway
+                        . runGateway
+                        $ runChannelRequest bot
                     )

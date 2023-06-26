@@ -22,8 +22,11 @@ instance FromJSON Nonce where
         (NonceText <$> parseJSON v)
             <|> (NonceNum <$> parseJSON v)
 
-newtype Snowflake = Snowflake Word64
+newtype Snowflake = Snowflake {unSnowflake :: Word64}
     deriving newtype (Ord, Eq, Num, Integral, Enum, Real, Bits, Read, Show)
+
+snowflakeToText :: Snowflake -> Text
+snowflakeToText (Snowflake iden) = show iden
 
 instance ToJSON Snowflake where
     toJSON = String . show
@@ -224,12 +227,12 @@ instance FromJSON RoleTags where
         do
             RoleTags
             <$> ob
-                .: "bot_id"
+            .: "bot_id"
             <*> ob
-                .: "integration_id"
+            .: "integration_id"
             <*> fmap isJust (ob .: "premium_subscriber" :: Parser (Maybe ()))
             <*> ob
-                .: "subscription_listing_id"
+            .: "subscription_listing_id"
             <*> fmap isJust (ob .: "available_for_purchase" :: Parser (Maybe ()))
             <*> fmap isJust (ob .: "guild_connections" :: Parser (Maybe ()))
 

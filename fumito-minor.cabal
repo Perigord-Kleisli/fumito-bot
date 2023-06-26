@@ -16,12 +16,13 @@ executable fumito
   other-modules:
     Polysemy.Websocket
     Polysemy.Req
-    Fumito.Client.Types
+    Fumito.Bot.Types
     Fumito.Gateway.Dispatch
     Fumito.Gateway.Types
     Fumito.Gateway.Shard
     Fumito.Utils
     Fumito.HTTP.Client
+    Fumito.HTTP.Types
     Fumito.Types.Channel
     Fumito.Types.Common
     Fumito.Types.Event
@@ -44,6 +45,7 @@ executable fumito
     , di-core
     , di-polysemy
     , generic-lens
+    , haskeline
     , lens
     , mtl
     , network
@@ -60,6 +62,7 @@ executable fumito
     , th-abstraction
     , template-haskell
     , transformers
+    , unagi-chan
     , websockets
     , wuss
 

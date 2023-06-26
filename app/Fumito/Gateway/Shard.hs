@@ -27,7 +27,7 @@ import Data.Aeson.Types (FromJSON)
 import Data.Generics.Labels ()
 import Data.String.Interpolate (i)
 import DiPolysemy (debug, push)
-import Fumito.Client.Types (FumitoOpts (..))
+import Fumito.Bot.Types (FumitoOpts (..))
 import Fumito.Gateway.Types
 import Fumito.Types.Common (LogEff)
 import Fumito.Types.Exception
