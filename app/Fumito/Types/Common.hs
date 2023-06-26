@@ -224,12 +224,12 @@ instance FromJSON RoleTags where
         do
             RoleTags
             <$> ob
-            .: "bot_id"
+                .: "bot_id"
             <*> ob
-            .: "integration_id"
+                .: "integration_id"
             <*> fmap isJust (ob .: "premium_subscriber" :: Parser (Maybe ()))
             <*> ob
-            .: "subscription_listing_id"
+                .: "subscription_listing_id"
             <*> fmap isJust (ob .: "available_for_purchase" :: Parser (Maybe ()))
             <*> fmap isJust (ob .: "guild_connections" :: Parser (Maybe ()))
 

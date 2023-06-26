@@ -249,11 +249,11 @@ instance FromJSON PayloadReceive where
                             (e :: Text) -> fail [i|Unknown dispatch event '#{e}'|]
                         )
                     <*> ob
-                    .: "s"
+                        .: "s"
             1 ->
                 HeartbeatReceive
                     <$> ob
-                    .: "d"
+                        .: "d"
             10 ->
                 (ob .: "d") >>= withObject "Hello Event" (fmap HelloEvent . (.: "heartbeat_interval"))
             11 -> return HeartBeatAck

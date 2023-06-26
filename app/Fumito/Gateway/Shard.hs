@@ -131,7 +131,7 @@ runGateway = fmap snd . PS.atomicStateToIO shardState . runGatewayToState . rais
                 }
 
 closeGateway :: (NW.WebSocketsData a, GatewayEffC r) => a -> Sem r ()
-closeGateway message = do 
+closeGateway message = do
     haltHeartBeat
     sendClose message
 
@@ -150,11 +150,11 @@ receiveDispatchEvent = do
 receiveHelloEvent :: GatewayEffC r => Sem r ()
 receiveHelloEvent = push "Heartbeat" do
     receivePayload' >>= \case
-        HelloEvent interval_ms -> do 
+        HelloEvent interval_ms -> do
             jitter <- embed $ randomRIO @Float (0, 1)
             embed $ threadDelay $ floor $ fromIntegral interval_ms * jitter
             haltHeartBeat
-            thread <- PA.async $ heartBeatLoop interval_ms 
+            thread <- PA.async $ heartBeatLoop interval_ms
             gatewayStateModify (#heartBeatThread ?~ thread)
         e -> throw (EventMismatch "HelloEvent" e)
 
@@ -169,11 +169,11 @@ sendHeartBeat = do
     gatewayStateModify (#heartBeatAckResponse .~ False)
 
 haltHeartBeat :: GatewayEffC r => Sem r ()
-haltHeartBeat = do 
+haltHeartBeat = do
     thread <- gatewayStateGets (^. #heartBeatThread)
     gatewayStateModify (#heartBeatThread .~ Nothing)
-    case thread of  
-        Just t -> do 
+    case thread of
+        Just t -> do
             debug @Text "Stopping heartbeat thread"
             PA.cancel t
         Nothing -> pass
